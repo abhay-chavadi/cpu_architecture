@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU Architecture Simulator</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <style>
+        /* Custom Animations */
+        @keyframes fade-in-up {
+            0% { opacity: 0; transform: translateY(10px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+            animation: fade-in-up 0.3s ease-out forwards;
+        }
+        @keyframes arrow-flow {
+            0% { transform: translateX(-5px) scale(1); opacity: 0.5; filter: drop-shadow(0 0 0px rgba(255,255,255,0)); }
+            50% { transform: translateX(5px) scale(1.3); opacity: 1; filter: drop-shadow(0 0 15px rgba(255,255,255,0.9)); color: #fff; }
+            100% { transform: translateX(-5px) scale(1); opacity: 0.5; filter: drop-shadow(0 0 0px rgba(255,255,255,0)); }
+        }
+        .animate-arrow-flow {
+            animation: arrow-flow 1.2s infinite ease-in-out;
+        }
+        @keyframes panel-pulse {
+            0% { filter: brightness(1); }
+            50% { filter: brightness(1.25); }
+            100% { filter: brightness(1); }
+        }
+        .active-panel-pulse {
+            animation: panel-pulse 2s infinite ease-in-out;
+        }
+        @keyframes scan {
+            0% { transform: translateY(-100%); background: linear-gradient(to bottom, transparent, rgba(250,204,21,0.4), transparent); }
+            100% { transform: translateY(100%); background: linear-gradient(to bottom, transparent, rgba(250,204,21,0.4), transparent); }
+        }
+        .animate-scan {
+            animation: scan 2s linear infinite;
+        }
+        @keyframes spin-slow {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .animate-spin-slow {
+            animation: spin-slow 3s linear infinite;
+        }
+        @keyframes float-smooth {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-12px); }
+        }
+        .animate-float {
+            animation: float-smooth 5s ease-in-out infinite;
+        }
+        .animate-float-delayed {
+            animation: float-smooth 5s ease-in-out 2.5s infinite;
+        }
+        .animate-float-fast {
+            animation: float-smooth 3s ease-in-out infinite;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        /* Utility class to force Tailwind to pre-compile these dynamic colors */
+        .hidden-safelist {
+            display: none;
+            color: #facc15; border-color: rgba(250,204,21,0.8); box-shadow: 0 0 50px rgba(250,204,21,0.6);
+            color: #22d3ee; border-color: rgba(34,211,238,0.8); box-shadow: 0 0 50px rgba(34,211,238,0.6);
+            color: #c084fc; border-color: rgba(192,132,252,0.8); box-shadow: 0 0 50px rgba(192,132,252,0.6);
+            color: #fb923c; border-color: rgba(251,146,60,0.8); box-shadow: 0 0 50px rgba(251,146,60,0.6);
+            color: #34d399; border-color: rgba(52,211,153,0.8); box-shadow: 0 0 50px rgba(52,211,153,0.6);
+        }
+    </style>
+</head>
+<body class="min-h-screen text-white p-4 md:p-8 font-sans overflow-x-hidden flex flex-col items-center relative" 
+      style="background-image: url('https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=2070'); background-size: cover; background-position: center; background-attachment: fixed;">
+    
+    <!-- Cyberpunk Overlay -->
+    <div class="absolute inset-0 bg-gradient-to-br from-indigo-950/90 via-black/90 to-purple-950/90 backdrop-blur-[2px] pointer-events-none"></div>
+
+    <!-- Floating Background Graphics -->
+    <div class="fixed top-20 left-10 w-96 h-96 bg-purple-600/20 rounded-full blur-[120px] animate-float-delayed pointer-events-none z-0"></div>
+    <div class="fixed bottom-20 right-10 w-96 h-96 bg-cyan-600/20 rounded-full blur-[120px] animate-float pointer-events-none z-0"></div>
+    <div class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-indigo-600/10 rounded-full blur-[150px] animate-pulse pointer-events-none z-0"></div>
+
+    <div class="relative z-10 w-full max-w-[1800px] flex flex-col xl:flex-row gap-6 mx-auto">
+        
+        <!-- LEFT COLUMN: Main Game / Pipeline (75%) -->
+        <div class="flex-1 flex flex-col gap-6 min-w-0">
+            
+            <!-- MISSION CONTROL HEADER -->
+            <div class="flex items-center gap-6 mb-4 md:mb-0 animate-float">
+                <div class="flex flex-col items-center justify-center p-4 bg-purple-500/10 border border-purple-500/30 rounded-2xl shadow-[0_0_20px_rgba(168,85,247,0.2)]">
+                    <span class="text-xs text-purple-300 uppercase tracking-widest font-bold">Sys. Level</span>
+                    <span id="level-display" class="text-4xl font-black text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]">1</span>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="p-4 bg-yellow-500/10 rounded-2xl border border-yellow-500/30">
+                        <i data-lucide="trophy" class="w-8 h-8 text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)]"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-yellow-500/80 font-bold uppercase tracking-widest">Creds Score</p>
+                        <p id="score-display" class="text-5xl font-black text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)]">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Target Task -->
+            <div class="flex flex-col items-center animate-float-delayed">
+                <div class="flex items-center gap-2 text-cyan-400 mb-2 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]">
+                    <i data-lucide="target" class="w-6 h-6 animate-spin-slow"></i>
+                    <h2 class="text-xl font-black uppercase tracking-widest">Active Directive</h2>
+                </div>
+                <div class="bg-cyan-950/40 border-2 border-cyan-500/80 rounded-xl px-8 py-3 shadow-[0_0_30px_rgba(34,211,238,0.3)]">
+                    <p id="target-display" class="text-3xl font-black font-mono text-cyan-50 tracking-wider">Loading...</p>
+                </div>
+            </div>
+
+            <!-- System Controls -->
+            <div class="flex items-center gap-4 mt-4 md:mt-0 min-w-[150px] justify-center h-16 animate-float-fast">
+                <!-- Status blocks managed by JS -->
+                <div id="status-valid" class="hidden flex flex-col items-center text-emerald-400 animate-bounce drop-shadow-[0_0_15px_rgba(52,211,153,0.8)]">
+                    <i data-lucide="check-circle-2" class="w-12 h-12"></i>
+                    <span class="text-xl font-black tracking-widest uppercase">Valid</span>
+                </div>
+                <div id="status-invalid" class="hidden flex flex-col items-center text-pink-500 animate-pulse drop-shadow-[0_0_15px_rgba(236,72,153,0.8)]">
+                    <i data-lucide="alert-circle" class="w-12 h-12"></i>
+                    <span class="text-xl font-black tracking-widest uppercase">Invalid</span>
+                </div>
+                <button id="btn-reboot" class="p-4 rounded-2xl bg-red-500/10 hover:bg-red-500/30 border border-red-500/50 text-red-400 font-bold flex flex-col items-center justify-center transition-all hover:shadow-[0_0_25px_rgba(239,68,68,0.6)] group">
+                    <i data-lucide="power" class="w-8 h-8 mb-1 group-hover:scale-110 transition-transform"></i>
+                    <span class="text-xs uppercase tracking-widest font-black">Sys Reboot</span>
+                </button>
+            </div>
+
+            <!-- INPUT & TERMINAL ROW -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-float">
+                
+                <!-- Input Configuration -->
+                <div class="lg:col-span-2 bg-black/50 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col relative overflow-hidden">
+                    <div class="absolute -right-20 -top-20 w-64 h-64 bg-indigo-600/20 rounded-full blur-[80px] pointer-events-none"></div>
+                    <h3 class="text-slate-300 font-black mb-6 flex items-center gap-2 uppercase tracking-widest text-sm drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">
+                        <i data-lucide="keyboard" class="w-5 h-5 text-indigo-400"></i> Input Matrix Terminal
+                    </h3>
+                    
+                    <div class="flex gap-4 mb-6">
+                        <button id="tab-number" class="flex-1 py-4 rounded-xl font-black uppercase tracking-wider flex items-center justify-center gap-3 transition-all bg-cyan-500/20 text-cyan-300 border-2 border-cyan-500/80 shadow-[0_0_20px_rgba(34,211,238,0.4)]">
+                            <i data-lucide="hash" class="w-6 h-6"></i> Numeric Data
+                        </button>
+                        <button id="tab-literal" class="flex-1 py-4 rounded-xl font-black uppercase tracking-wider flex items-center justify-center gap-3 transition-all bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/10">
+                            <i data-lucide="type" class="w-6 h-6"></i> Literal String
+                        </button>
+                    </div>
+
+                    <div class="flex-1 flex flex-col justify-center mb-6">
+                        <!-- Number Input Group -->
+                        <div id="input-group-number" class="flex gap-4 items-center">
+                            <input type="number" id="num-a" placeholder="00" class="w-2/5 bg-black/80 border border-cyan-500/40 rounded-xl p-5 text-4xl font-black font-mono text-center text-cyan-200 focus:border-cyan-400 focus:shadow-[0_0_20px_rgba(34,211,238,0.6)] outline-none transition-all" />
+                            <select id="op-select" class="w-1/5 bg-slate-900/80 border border-cyan-500/40 rounded-xl p-5 text-4xl font-black font-mono text-center text-cyan-400 focus:border-cyan-400 focus:shadow-[0_0_20px_rgba(34,211,238,0.6)] outline-none appearance-none cursor-pointer">
+                                <option value="+">+</option><option value="-">-</option><option value="*">×</option><option value="/">÷</option>
+                            </select>
+                            <input type="number" id="num-b" placeholder="00" class="w-2/5 bg-black/80 border border-cyan-500/40 rounded-xl p-5 text-4xl font-black font-mono text-center text-cyan-200 focus:border-cyan-400 focus:shadow-[0_0_20px_rgba(34,211,238,0.6)] outline-none transition-all" />
+                        </div>
+                        
+                        <!-- String Input Group -->
+                        <div id="input-group-literal" class="hidden">
+                            <input type="text" id="lit-val" placeholder="ENTER STRING" class="w-full bg-black/80 border border-pink-500/40 rounded-xl p-5 text-3xl font-black font-mono text-center text-pink-200 focus:border-pink-400 focus:shadow-[0_0_20px_rgba(236,72,153,0.6)] outline-none uppercase transition-all" />
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <button id="btn-execute" class="flex-1 py-5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 disabled:grayscale text-white font-black text-2xl tracking-widest uppercase flex items-center justify-center gap-3 transition-all shadow-[0_0_30px_rgba(139,92,246,0.6)] hover:shadow-[0_0_50px_rgba(139,92,246,1)]">
+                            <i data-lucide="play" class="w-8 h-8"></i> Execute Code
+                        </button>
+                        <button id="btn-abort" class="hidden px-6 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-300 border border-red-500/50 font-black uppercase tracking-wider flex items-center justify-center transition-all shadow-[0_0_15px_rgba(239,68,68,0.4)]">
+                            Abort
+                        </button>
+                    </div>
+                </div>
+
+                <!-- System Live Log -->
+                <div class="bg-[#050510]/90 backdrop-blur-xl border border-white/10 rounded-3xl p-5 shadow-2xl flex flex-col h-[320px] lg:h-auto">
+                    <div class="flex items-center gap-2 mb-4 border-b border-white/10 pb-3">
+                        <i data-lucide="activity" class="w-5 h-5 text-emerald-400 animate-pulse"></i>
+                        <h3 class="text-emerald-400 font-black uppercase tracking-widest text-sm drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]">System Live Log</h3>
+                    </div>
+                    <div id="live-logs-container" class="flex-1 overflow-hidden font-mono text-xs md:text-sm flex flex-col justify-end space-y-2">
+                        <!-- Logs injected by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- HARDWARE PIPELINE -->
+            <div class="flex flex-col xl:flex-row items-center xl:items-stretch justify-center gap-4 z-10 mt-4 overflow-x-auto w-full pb-12 pt-4 hide-scrollbar">
+                
+                <!-- Step 1: FETCH -->
+                <div id="panel-1" class="backdrop-blur-xl border border-white/20 rounded-2xl overflow-hidden transition-all duration-700 relative flex flex-col items-center justify-start min-h-[400px] min-w-[240px] flex-1 shrink-0 bg-black/40 group opacity-40 grayscale" style="--color-rgb: 250, 204, 21;">
+                    <div class="relative w-full h-36 overflow-hidden border-b border-yellow-500/30 group-hover:after:content-[''] group-hover:after:absolute group-hover:after:inset-0 group-hover:after:bg-yellow-400/20 group-hover:after:animate-scan">
+                        <div class="absolute inset-0 bg-yellow-900/60 mix-blend-multiply z-10"></div>
+                        <img src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&q=80&w=400" alt="Fetch" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
+                        <div class="absolute top-3 left-3 bg-yellow-500/90 text-black text-xs font-black px-3 py-1 rounded-full shadow-[0_0_15px_rgba(250,204,21,1)] z-20 flex items-center gap-2">
+                            <i data-lucide="zap" class="w-3 h-3 animate-pulse"></i> 1. FETCH (IF)
+                        </div>
+                        <div id="clock-bars-1" class="absolute bottom-3 right-3 flex items-end gap-1 z-20 opacity-80">
+                            <!-- JS injected bars -->
+                        </div>
+                    </div>
+                    <div class="p-5 flex flex-col items-center flex-1 w-full relative">
+                        <i id="icon-fetch" data-lucide="server" class="absolute top-4 right-4 w-8 h-8 opacity-20"></i>
+                        <h3 class="text-lg font-black text-white mb-2 tracking-widest uppercase">Program Counter</h3>
+                        <p class="text-[10px] text-yellow-200/70 text-center mb-4 px-2 leading-tight">Retrieves the next instruction from instruction memory.</p>
+                        
+                        <div class="w-full flex-1 flex flex-col items-center justify-center mt-2 relative bg-black/60 rounded-xl border border-yellow-500/30 shadow-[inset_0_0_15px_rgba(250,204,21,0.1)] group-hover:border-yellow-400/60 transition-colors overflow-hidden">
+                            <div class="absolute inset-0 opacity-10 group-hover:opacity-30 transition-opacity mix-blend-screen pointer-events-none" style="background-image: radial-gradient(circle at center, #facc15 1px, transparent 1px); background-size: 10px 10px;"></div>
+                            <div id="pc-content" class="w-full h-full flex items-center justify-center relative z-10 p-2">
+                                <span class="text-slate-600 font-black uppercase tracking-widest flex items-center gap-2">
+                                    <i data-lucide="power" class="w-4 h-4"></i> Awaiting
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="arrow-2" class="flex items-center justify-center py-2 xl:py-0 px-2 shrink-0 z-20 rotate-90 xl:rotate-0">
+                    <i data-lucide="arrow-right" class="w-8 h-8 transition-all duration-700 text-slate-700 opacity-50"></i>
+                </div>
+
+                <!-- Step 2: DECODE -->
+                <div id="panel-2" class="backdrop-blur-xl border border-white/20 rounded-2xl overflow-hidden transition-all duration-700 relative flex flex-col items-center justify-start min-h-[400px] min-w-[240px] flex-1 shrink-0 bg-black/40 group opacity-40 grayscale" style="--color-rgb: 34, 211, 238;">
+                    <div class="relative w-full h-36 overflow-hidden border-b border-cyan-500/30 group-hover:after:content-[''] group-hover:after:absolute group-hover:after:inset-0 group-hover:after:bg-cyan-400/20 group-hover:after:animate-scan">
+                        <div class="absolute inset-0 bg-cyan-800/30 z-10"></div>
+                        <img src="https://images.unsplash.com/photo-1563770660941-20978e870e26?auto=format&fit=crop&q=80&w=400" alt="Decode" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
+                        <div class="absolute top-3 left-3 bg-cyan-500/90 text-black text-xs font-black px-3 py-1 rounded-full shadow-[0_0_15px_rgba(34,211,238,1)] z-20">2. DECODE (ID)</div>
+                    </div>
+                    <div class="p-5 flex flex-col items-center flex-1 w-full relative">
+                        <i id="icon-decode" data-lucide="database" class="absolute top-4 right-4 w-8 h-8 opacity-20"></i>
+                        <h3 class="text-lg font-black text-white mb-6 tracking-widest uppercase text-center">Register Map</h3>
+                        <div id="decode-content" class="w-full flex flex-col gap-2 mt-auto">
+                            <div class="w-full h-24 flex items-center justify-center text-slate-600 font-black uppercase tracking-widest border border-slate-700/30 rounded-xl">IDLE</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="arrow-3" class="flex items-center justify-center py-2 xl:py-0 px-2 shrink-0 z-20 rotate-90 xl:rotate-0">
+                    <i data-lucide="arrow-right" class="w-8 h-8 transition-all duration-700 text-slate-700 opacity-50"></i>
+                </div>
+
+                <!-- Step 3: EXECUTE -->
+                <div id="panel-3" class="backdrop-blur-xl border border-white/20 rounded-2xl overflow-hidden transition-all duration-700 relative flex flex-col items-center justify-start min-h-[400px] min-w-[240px] flex-1 shrink-0 bg-black/40 group opacity-40 grayscale" style="--color-rgb: 192, 132, 252;">
+                    <div class="relative w-full h-36 overflow-hidden border-b border-purple-500/30">
+                        <div class="absolute inset-0 bg-purple-900/60 mix-blend-multiply z-10"></div>
+                        <img src="https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&q=80&w=400" alt="Execute" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
+                        <div class="absolute top-3 left-3 bg-purple-500/90 text-black text-xs font-black px-3 py-1 rounded-full shadow-[0_0_15px_rgba(192,132,252,1)] z-20">3. EXECUTE (EX)</div>
+                    </div>
+                    <div class="p-5 flex flex-col items-center flex-1 w-full relative">
+                        <div id="icon-exec-container" class="absolute top-4 right-4 opacity-20">
+                            <i data-lucide="calculator" class="w-8 h-8"></i>
+                        </div>
+                        <h3 id="exec-title" class="text-lg font-black text-white mb-6 tracking-widest uppercase">ALU Core</h3>
+                        <div id="exec-content" class="h-28 mt-auto w-full flex flex-col items-center justify-center overflow-hidden bg-black/80 rounded-xl border-2 border-purple-500/50 p-2 shadow-[inset_0_0_30px_rgba(192,132,252,0.15)]">
+                            <span class="text-lg font-black text-slate-500 tracking-widest uppercase opacity-50">Core Idle</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="arrow-4" class="flex items-center justify-center py-2 xl:py-0 px-2 shrink-0 z-20 rotate-90 xl:rotate-0">
+                    <i data-lucide="arrow-right" class="w-8 h-8 transition-all duration-700 text-slate-700 opacity-50"></i>
+                </div>
+
+                <!-- Step 4: MEMORY -->
+                <div id="panel-4" class="backdrop-blur-xl border border-white/20 rounded-2xl overflow-hidden transition-all duration-700 relative flex flex-col items-center justify-start min-h-[400px] min-w-[240px] flex-1 shrink-0 bg-black/40 group opacity-40 grayscale" style="--color-rgb: 251, 146, 60;">
+                    <div class="relative w-full h-36 overflow-hidden border-b border-orange-500/30">
+                        <div class="absolute inset-0 bg-orange-900/60 mix-blend-multiply z-10"></div>
+                        <img src="https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&q=80&w=400" alt="Memory" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
+                        <div class="absolute top-3 left-3 bg-orange-500/90 text-black text-xs font-black px-3 py-1 rounded-full shadow-[0_0_15px_rgba(251,146,60,1)] z-20">4. MEMORY (MEM)</div>
+                    </div>
+                    <div class="p-5 flex flex-col items-center flex-1 w-full relative">
+                        <i id="icon-mem" data-lucide="hard-drive" class="absolute top-4 right-4 w-8 h-8 opacity-20"></i>
+                        <h3 class="text-lg font-black text-white mb-6 tracking-widest uppercase">Data Memory</h3>
+                        <div id="mem-content" class="h-28 mt-auto w-full flex flex-col items-center justify-center overflow-hidden bg-black/80 rounded-xl border border-orange-500/30 shadow-[inset_0_0_20px_rgba(251,146,60,0.15)]">
+                            <span class="text-lg font-black text-slate-500 tracking-widest uppercase opacity-50">Standby</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="arrow-5" class="flex items-center justify-center py-2 xl:py-0 px-2 shrink-0 z-20 rotate-90">
+                    <i data-lucide="arrow-right" class="w-8 h-8 transition-all duration-700 text-slate-700 opacity-50"></i>
+                </div>
+
+                <!-- Step 5: WRITE-BACK -->
+                <div id="panel-5" class="backdrop-blur-xl border border-white/20 rounded-2xl overflow-hidden transition-all duration-700 relative flex flex-col items-center justify-start min-h-[400px] min-w-[240px] flex-1 shrink-0 bg-black/40 group opacity-40 grayscale" style="--color-rgb: 52, 211, 153;">
+                    <div class="relative w-full h-36 overflow-hidden border-b border-emerald-500/30">
+                        <div class="absolute inset-0 bg-emerald-900/60 mix-blend-multiply z-10"></div>
+                        <img src="https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=400" alt="Write-Back" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
+                        <div class="absolute top-3 left-3 bg-emerald-500/90 text-black text-xs font-black px-3 py-1 rounded-full shadow-[0_0_15px_rgba(52,211,153,1)] z-20">5. WRITE-BACK (WB)</div>
+                    </div>
+                    <div class="p-5 flex flex-col items-center flex-1 w-full relative">
+                        <i id="icon-wb" data-lucide="refresh-ccw" class="absolute top-4 right-4 w-8 h-8 opacity-20"></i>
+                        <h3 class="text-lg font-black text-white mb-6 tracking-widest uppercase">Register Update</h3>
+                        <div id="wb-content" class="mt-auto w-full h-32 bg-[#020804] border border-emerald-500/30 rounded-xl flex flex-col items-center justify-center overflow-hidden shadow-[inset_0_0_20px_rgba(52,211,153,0.15)] py-2">
+                            <span class="text-lg font-black text-slate-500 tracking-widest uppercase opacity-50">Standby</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div> 
+
+        <!-- RIGHT COLUMN: Debug Terminal -->
+        <div class="w-full xl:w-80 2xl:w-[400px] shrink-0 flex flex-col bg-black/80 backdrop-blur-xl border border-white/20 rounded-3xl shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-hidden h-[calc(100vh-4rem)] sticky top-8 animate-float-delayed">
+            <div class="bg-slate-900 border-b border-white/10 p-4 flex items-center gap-3">
+                <i data-lucide="terminal" class="w-5 h-5 text-emerald-400"></i>
+                <span class="text-sm text-white font-mono font-bold tracking-widest uppercase">Debug Console</span>
+            </div>
+            <div class="flex-1 p-5 overflow-y-auto flex flex-col justify-start">
+                <div id="asm-logs-container" class="space-y-2 font-mono text-xs md:text-sm leading-relaxed">
+                    <!-- ASM Logs injected by JS -->
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- Game Logic Scripts -->
+    <script>
+        // Initialize Lucide Icons immediately
+        lucide.createIcons();
+
+        // Game State
+        const state = {
+            score: 0,
+            level: 1,
+            target: { type: 'NUMBER', value: 0, display: '' },
+            feedback: null, // 'SUCCESS', 'ERROR', null
+            inputType: 'NUMBER', // 'NUMBER', 'LITERAL'
+            numA: '',
+            numB: '',
+            op: '+',
+            litVal: '',
+            activeStep: 0, // 0 to 5
+            processedResult: null,
+            binaryView: '',
+            asmLogs: ['SYS_INIT'],
+            logs: ['> SYSTEM BOOT SEQ... OK', '> WAITING FOR USER INPUT...'],
+            pcAddress: 'AWAIT',
+            scrambleInterval: null,
+            pipelineTimer: null
+        };
+
+        // Helper Functions
+        function addLog(msg) {
+            state.logs.push(`[sys] ${msg}`);
+            if (state.logs.length > 7) state.logs.shift();
+            renderLogs();
+        }
+
+        function addAsmLog(msg) {
+            state.asmLogs.push(msg);
+            if (state.asmLogs.length > 15) state.asmLogs.shift();
+            renderAsmLogs();
+        }
+
+        function generateTarget() {
+            const isNum = Math.random() > 0.5;
+            if (isNum) {
+                const val = Math.floor(Math.random() * (10 * state.level)) + 1;
+                state.target = { type: 'NUMBER', value: val, display: `Generate: ${val}` };
+            } else {
+                const words = ["HELLO", "DATA", "CPU", "RAM", "BYTE", "CODE", "NODE", "GATES", "LOGIC"];
+                const word = words[Math.floor(Math.random() * words.length)];
+                state.target = { type: 'LITERAL', value: `"${word}"`, display: `Output: "${word}"` };
+            }
+            document.getElementById('target-display').innerText = state.target.display;
+        }
+
+        function evaluateResult() {
+            const isMatch = (state.inputType === 'NUMBER' && state.processedResult === state.target.value) || 
+                            (state.inputType === 'LITERAL' && state.processedResult === state.target.value);
+            
+            if (isMatch) {
+                state.feedback = 'SUCCESS';
+                addLog("TARGET MATCH! SYSTEM REWARD GRANTED.");
+                state.score += (10 * state.level);
+                state.level += 1;
+                
+                // Fire Confetti
+                confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.8 },
+                    colors: ['#34d399', '#10b981', '#059669', '#f472b6']
+                });
+                
+                generateTarget();
+            } else {
+                state.feedback = 'ERROR';
+                addLog(`CRITICAL FAILURE: EXPECTED ${state.target.value}, GOT ${state.processedResult}`);
+            }
+            updateUI();
+        }
+
+        function resetCycle() {
+            clearTimeout(state.pipelineTimer);
+            clearInterval(state.scrambleInterval);
+            state.activeStep = 0;
+            state.feedback = null;
+            state.processedResult = null;
+            state.binaryView = '';
+            state.pcAddress = 'AWAIT';
+            addLog("PIPELINE RESET. STANDBY.");
+            updateUI();
+        }
+
+        function systemReset() {
+            state.score = 0;
+            state.level = 1;
+            document.getElementById('num-a').value = '';
+            document.getElementById('num-b').value = '';
+            document.getElementById('lit-val').value = '';
+            state.asmLogs = ['SYS_INIT'];
+            addLog("FULL SYSTEM REBOOT INITIATED...");
+            resetCycle();
+            generateTarget();
+        }
+
+        // DOM Update Functions
+        function renderLogs() {
+            const container = document.getElementById('live-logs-container');
+            container.innerHTML = '';
+            state.logs.forEach((log, i) => {
+                const div = document.createElement('div');
+                div.className = `animate-fade-in-up ${i === state.logs.length - 1 ? 'text-white font-bold drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]' : 'text-emerald-500/70'}`;
+                div.innerText = log;
+                container.appendChild(div);
+            });
+        }
+
+        function renderAsmLogs() {
+            const container = document.getElementById('asm-logs-container');
+            container.innerHTML = '';
+            state.asmLogs.forEach((log, idx) => {
+                const div = document.createElement('div');
+                div.className = "flex gap-3";
+                
+                const spanNum = document.createElement('span');
+                spanNum.className = "text-slate-600 select-none";
+                spanNum.innerText = `[${idx.toString().padStart(3, '0')}]`;
+                
+                const spanLog = document.createElement('span');
+                spanLog.className = idx === state.asmLogs.length - 1 ? 'text-emerald-300 drop-shadow-[0_0_5px_rgba(110,231,183,0.8)] font-bold' : 'text-emerald-600';
+                spanLog.innerText = log;
+                
+                div.appendChild(spanNum);
+                div.appendChild(spanLog);
+                container.appendChild(div);
+            });
+            container.parentElement.scrollTop = container.parentElement.scrollHeight;
+        }
+
+        // Update main UI components based on State
+        function updateUI() {
+            // Header stats
+            document.getElementById('level-display').innerText = state.level;
+            document.getElementById('score-display').innerText = state.score;
+
+            // Input Tabs Styling
+            const tabNum = document.getElementById('tab-number');
+            const tabLit = document.getElementById('tab-literal');
+            const grpNum = document.getElementById('input-group-number');
+            const grpLit = document.getElementById('input-group-literal');
+
+            if (state.inputType === 'NUMBER') {
+                tabNum.className = "flex-1 py-4 rounded-xl font-black uppercase tracking-wider flex items-center justify-center gap-3 transition-all bg-cyan-500/20 text-cyan-300 border-2 border-cyan-500/80 shadow-[0_0_20px_rgba(34,211,238,0.4)]";
+                tabLit.className = "flex-1 py-4 rounded-xl font-black uppercase tracking-wider flex items-center justify-center gap-3 transition-all bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/10";
+                grpNum.classList.remove('hidden');
+                grpNum.classList.add('flex');
+                grpLit.classList.add('hidden');
+            } else {
+                tabLit.className = "flex-1 py-4 rounded-xl font-black uppercase tracking-wider flex items-center justify-center gap-3 transition-all bg-pink-500/20 text-pink-300 border-2 border-pink-500/80 shadow-[0_0_20px_rgba(236,72,153,0.4)]";
+                tabNum.className = "flex-1 py-4 rounded-xl font-black uppercase tracking-wider flex items-center justify-center gap-3 transition-all bg-white/5 border border-white/10 text-slate-500 hover:text-slate-300 hover:bg-white/10";
+                grpLit.classList.remove('hidden');
+                grpNum.classList.add('hidden');
+                grpNum.classList.remove('flex');
+            }
+
+            // Controls & Status
+            const isExecuting = state.activeStep > 0 && !state.feedback;
+            document.getElementById('btn-reboot').style.display = state.feedback ? 'none' : 'flex';
+            document.getElementById('status-valid').style.display = state.feedback === 'SUCCESS' ? 'flex' : 'none';
+            document.getElementById('status-invalid').style.display = state.feedback === 'ERROR' ? 'flex' : 'none';
+
+            // Disable logic
+            document.getElementById('tab-number').disabled = isExecuting;
+            document.getElementById('tab-literal').disabled = isExecuting;
+            document.getElementById('num-a').disabled = isExecuting;
+            document.getElementById('num-b').disabled = isExecuting;
+            document.getElementById('op-select').disabled = isExecuting;
+            document.getElementById('lit-val').disabled = isExecuting;
+            
+            // Execute Button logic
+            const btnExec = document.getElementById('btn-execute');
+            let execDisabled = isExecuting;
+            if (state.inputType === 'NUMBER' && (!state.numA || !state.numB)) execDisabled = true;
+            if (state.inputType === 'LITERAL' && !state.litVal) execDisabled = true;
+            btnExec.disabled = execDisabled;
+
+            const btnAbort = document.getElementById('btn-abort');
+            if (isExecuting) {
+                btnAbort.classList.remove('hidden');
+                btnAbort.classList.add('flex');
+            } else {
+                btnAbort.classList.add('hidden');
+                btnAbort.classList.remove('flex');
+            }
+
+            // Update Pipeline Panels
+            updatePipelinePanels();
+        }
+
+        // Pipeline Visual Updates
+        function updatePipelinePanels() {
+            const baseClass = "backdrop-blur-xl border border-white/20 rounded-2xl overflow-hidden transition-all duration-700 relative flex flex-col items-center justify-start min-h-[400px] min-w-[240px] flex-1 shrink-0 bg-black/40 group";
+            
+            const panelsData = [
+                { step: 1, color: 'yellow-400', id: 'panel-1' },
+                { step: 2, color: 'cyan-400', id: 'panel-2' },
+                { step: 3, color: 'purple-400', id: 'panel-3' },
+                { step: 4, color: 'orange-400', id: 'panel-4' },
+                { step: 5, color: 'emerald-400', id: 'panel-5' }
+            ];
+
+            panelsData.forEach(p => {
+                const el = document.getElementById(p.id);
+                let finalClass = baseClass;
+                
+                if (state.activeStep === 5 && state.feedback) {
+                    finalClass += ` shadow-[0_0_30px_rgba(var(--color-rgb),0.3)] border-${p.color}/60 ring-1 ring-${p.color}/30 opacity-100`;
+                } else if (state.activeStep === p.step) {
+                    finalClass += ` shadow-[0_0_50px_rgba(var(--color-rgb),0.6)] scale-105 z-10 border-${p.color}/80 ring-2 ring-${p.color}/50 active-panel-pulse`;
+                } else if (state.activeStep > p.step) {
+                    finalClass += ` opacity-100 border-${p.color}/50`;
+                } else {
+                    finalClass += ` opacity-40 grayscale`;
+                }
+                el.className = finalClass;
+            });
+
+            // Update Arrows
+            for (let i = 2; i <= 5; i++) {
+                const arrowWrapper = document.getElementById(`arrow-${i}`);
+                if (arrowWrapper && arrowWrapper.firstElementChild) {
+                    const arr = arrowWrapper.firstElementChild;
+                    const targetStep = i;
+                    if (state.activeStep === targetStep) {
+                        arr.setAttribute('class', "lucide lucide-arrow-right w-8 h-8 transition-all duration-700 text-white animate-arrow-flow");
+                    } else if (state.activeStep > targetStep) {
+                        arr.setAttribute('class', "lucide lucide-arrow-right w-8 h-8 transition-all duration-700 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.4)] scale-110");
+                    } else {
+                        arr.setAttribute('class', "lucide lucide-arrow-right w-8 h-8 transition-all duration-700 text-slate-700 opacity-50");
+                    }
+                }
+            }
+
+            // Panel 1: PC
+            const pcContent = document.getElementById('pc-content');
+            const bars = document.getElementById('clock-bars-1');
+            const iconFetch = document.getElementById('icon-fetch');
+            if (state.activeStep >= 1) {
+                if (iconFetch) iconFetch.setAttribute('class', `lucide lucide-server absolute top-4 right-4 w-8 h-8 ${state.activeStep === 1 ? 'text-yellow-400 opacity-80 animate-pulse' : 'opacity-20'}`);
+                pcContent.innerHTML = `
+                    <div class="flex flex-col items-center justify-center gap-2 text-center w-full px-4 py-2 relative z-10">
+                        <span class="text-yellow-400 font-mono font-black text-sm drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]">
+                            ${state.activeStep === 1 && state.pcAddress === 'AWAIT' ? "FETCHING..." : `PC_ADDR: 0x${state.pcAddress}`}
+                        </span>
+                        ${state.activeStep > 1 ? `<span class="text-[10px] font-bold text-yellow-900 mt-1 bg-yellow-400 px-3 py-1 rounded shadow-[0_0_15px_rgba(250,204,21,0.6)] flex items-center gap-1"><i data-lucide="check-circle-2" class="w-3 h-3"></i> Instruction Loaded</span>` : ''}
+                    </div>
+                `;
+                bars.innerHTML = `
+                    <div class="w-1.5 bg-yellow-400 rounded-t-sm transition-all duration-75 ${state.activeStep === 1 ? 'h-6 animate-ping' : 'h-8'}"></div>
+                    <div class="w-1.5 bg-yellow-400 rounded-t-sm transition-all duration-150 delay-75 ${state.activeStep === 1 ? 'h-8 animate-ping' : 'h-4'}"></div>
+                    <div class="w-1.5 bg-yellow-400 rounded-t-sm transition-all duration-300 delay-150 ${state.activeStep === 1 ? 'h-4 animate-ping' : 'h-6'}"></div>
+                `;
+            } else {
+                if (iconFetch) iconFetch.setAttribute('class', "lucide lucide-server absolute top-4 right-4 w-8 h-8 opacity-20");
+                pcContent.innerHTML = `<span class="text-slate-600 font-black uppercase tracking-widest flex items-center gap-2"><i data-lucide="power" class="w-4 h-4"></i> Awaiting</span>`;
+                bars.innerHTML = `
+                    <div class="w-1.5 bg-yellow-400 rounded-t-sm transition-all duration-75 h-2"></div>
+                    <div class="w-1.5 bg-yellow-400 rounded-t-sm transition-all duration-150 delay-75 h-1"></div>
+                    <div class="w-1.5 bg-yellow-400 rounded-t-sm transition-all duration-300 delay-150 h-3"></div>
+                `;
+            }
+
+            // Panel 2: Decode
+            const decContent = document.getElementById('decode-content');
+            const iconDecode = document.getElementById('icon-decode');
+            if (state.activeStep >= 2) {
+                if (iconDecode) iconDecode.setAttribute('class', `lucide lucide-database absolute top-4 right-4 w-8 h-8 ${state.activeStep === 2 ? 'text-cyan-400 opacity-80 animate-pulse' : 'opacity-20'}`);
+                if (state.inputType === 'NUMBER') {
+                    decContent.innerHTML = `
+                        <div class="flex gap-2 w-full h-24">
+                            <div class="flex-1 bg-black/80 border border-cyan-500/50 rounded-xl flex flex-col justify-center text-center shadow-[inset_0_0_20px_rgba(34,211,238,0.15)] relative overflow-hidden">
+                                <div class="absolute top-0 w-full h-1 bg-cyan-500/50"></div>
+                                <span class="text-[10px] text-cyan-400 uppercase font-black tracking-widest mb-1">REG_A</span>
+                                <span class="font-mono font-black text-2xl text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]">${state.numA}</span>
+                            </div>
+                            <div class="flex-1 bg-black/80 border border-cyan-500/50 rounded-xl flex flex-col justify-center text-center shadow-[inset_0_0_20px_rgba(34,211,238,0.15)] relative overflow-hidden">
+                                <div class="absolute top-0 w-full h-1 bg-cyan-500/50"></div>
+                                <span class="text-[10px] text-cyan-400 uppercase font-black tracking-widest mb-1">REG_B</span>
+                                <span class="font-mono font-black text-2xl text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]">${state.numB}</span>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    decContent.innerHTML = `
+                        <div class="w-full h-24 bg-black/80 border border-pink-500/50 rounded-xl flex flex-col justify-center text-center shadow-[inset_0_0_20px_rgba(236,72,153,0.15)] relative overflow-hidden">
+                            <div class="absolute top-0 w-full h-1 bg-pink-500/50"></div>
+                            <span class="text-[10px] text-pink-400 uppercase font-black tracking-widest mb-1">REG_STR</span>
+                            <span class="font-mono font-black text-xl text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.8)] truncate px-2">"${state.litVal}"</span>
+                        </div>
+                    `;
+                }
+            } else {
+                if (iconDecode) iconDecode.setAttribute('class', "lucide lucide-database absolute top-4 right-4 w-8 h-8 opacity-20");
+                decContent.innerHTML = `<div class="w-full h-24 flex items-center justify-center text-slate-600 font-black uppercase tracking-widest border border-slate-700/30 rounded-xl">IDLE</div>`;
+            }
+
+            // Panel 3: Execute
+            const execContent = document.getElementById('exec-content');
+            const iconExecContainer = document.getElementById('icon-exec-container');
+            const execTitle = document.getElementById('exec-title');
+            
+            if (state.inputType === 'NUMBER') {
+                execTitle.innerText = "ALU Core";
+                iconExecContainer.innerHTML = `<i data-lucide="calculator" class="w-8 h-8 ${state.activeStep === 3 ? 'text-purple-400 opacity-80 animate-spin-slow' : 'opacity-20'}"></i>`;
+            } else {
+                execTitle.innerText = "Decoder / Compiler";
+                iconExecContainer.innerHTML = `<i data-lucide="binary" class="w-8 h-8 ${state.activeStep === 3 ? 'text-pink-400 opacity-80 animate-pulse' : 'opacity-20'}"></i>`;
+            }
+
+            if (state.activeStep >= 3) {
+                if (state.inputType === 'NUMBER') {
+                    execContent.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <span class="text-2xl font-black font-mono text-white">${state.numA}</span>
+                            <span class="text-2xl font-black font-mono text-purple-400 drop-shadow-[0_0_15px_rgba(192,132,252,1)]">${state.op}</span>
+                            <span class="text-2xl font-black font-mono text-white">${state.numB}</span>
+                        </div>
+                    `;
+                } else {
+                    execContent.innerHTML = `
+                        <div class="flex flex-col items-center w-full">
+                            <span class="text-[9px] font-mono text-pink-400 break-all leading-tight opacity-90 mb-1 w-full text-center">
+                                ${state.binaryView}
+                            </span>
+                            <span class="text-[9px] text-white font-black uppercase tracking-widest bg-pink-500/20 px-2 py-1 rounded border border-pink-500/30">Translation Active</span>
+                        </div>
+                    `;
+                }
+            } else {
+                execContent.innerHTML = `<span class="text-lg font-black text-slate-500 tracking-widest uppercase opacity-50">Core Idle</span>`;
+            }
+
+            // Panel 4: Memory
+            const memContent = document.getElementById('mem-content');
+            const iconMem = document.getElementById('icon-mem');
+            if (state.activeStep >= 4) {
+                if (iconMem) iconMem.setAttribute('class', `lucide lucide-hard-drive absolute top-4 right-4 w-8 h-8 ${state.activeStep === 4 ? 'text-orange-400 opacity-80 animate-bounce' : 'opacity-20'}`);
+                memContent.innerHTML = `
+                    <div class="flex flex-col items-center gap-2">
+                        <i data-lucide="database" class="w-6 h-6 text-orange-400"></i>
+                        <span class="text-[10px] text-orange-300 uppercase tracking-widest bg-orange-500/20 px-3 py-1 rounded border border-orange-500/30">Mem Read/Write</span>
+                    </div>
+                `;
+            } else {
+                if (iconMem) iconMem.setAttribute('class', "lucide lucide-hard-drive absolute top-4 right-4 w-8 h-8 opacity-20");
+                memContent.innerHTML = `<span class="text-lg font-black text-slate-500 tracking-widest uppercase opacity-50">Standby</span>`;
+            }
+
+            // Panel 5: Writeback
+            const wbContent = document.getElementById('wb-content');
+            const iconWb = document.getElementById('icon-wb');
+            if (state.activeStep >= 5) {
+                if (iconWb) iconWb.setAttribute('class', `lucide lucide-refresh-ccw absolute top-4 right-4 w-8 h-8 ${state.activeStep === 5 ? 'text-emerald-400 opacity-80 animate-spin-slow' : 'opacity-20'}`);
+                const isErr = state.feedback === 'ERROR';
+                wbContent.innerHTML = `
+                    <div class="flex flex-col items-center gap-2 text-center px-2">
+                        <i data-lucide="check-circle-2" class="w-6 h-6 text-emerald-400"></i>
+                        <span class="text-[10px] uppercase tracking-widest px-3 py-1 rounded border text-emerald-300 bg-emerald-500/20 border-emerald-500/30">
+                            ${isErr ? 'Executed' : 'Registers Synced'}
+                        </span>
+                        ${state.processedResult !== null ? `
+                            <span class="text-xl font-mono font-black mt-1 text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.8)]">
+                                > ${state.processedResult}
+                            </span>
+                            ${isErr ? `<span class="text-[9px] text-pink-300 bg-black/50 px-2 py-0.5 rounded shadow mt-1">Expected: ${state.target.value}</span>` : ''}
+                        ` : ''}
+                    </div>
+                `;
+            } else {
+                if (iconWb) iconWb.setAttribute('class', "lucide lucide-refresh-ccw absolute top-4 right-4 w-8 h-8 opacity-20");
+                wbContent.innerHTML = `<span class="text-lg font-black text-slate-500 tracking-widest uppercase opacity-50">Standby</span>`;
+            }
+
+            // Re-initialize any dynamically added Lucide icons
+            lucide.createIcons();
+        }
+
+        // Pipeline Logic
+        function advanceStep(targetStep) {
+            state.activeStep = targetStep;
+            updateUI();
+
+            if (targetStep === 1) {
+                addLog("FETCH (IF): Retrieving instruction from PC.");
+                addAsmLog(`FETCH INST @ 0x${Math.floor(Math.random()*65535).toString(16).toUpperCase()}`);
+                
+                // Scramble PC effect
+                state.scrambleInterval = setInterval(() => {
+                    state.pcAddress = Math.floor(Math.random()*65535).toString(16).toUpperCase().padStart(4, '0');
+                    // Fast targeted DOM update to prevent lag
+                    const el = document.getElementById('pc-content');
+                    if (el && state.activeStep === 1) {
+                        const span = el.querySelector('span');
+                        if (span) span.innerText = `PC_ADDR: 0x${state.pcAddress}`;
+                    }
+                }, 50);
+                
+                state.pipelineTimer = setTimeout(() => { clearInterval(state.scrambleInterval); advanceStep(2); }, 1200);
+            }
+            else if (targetStep === 2) {
+                addLog("DECODE (ID): Decoding instructions and allocating registers.");
+                if (state.inputType === 'NUMBER') {
+                    addAsmLog(`DECODE MATH_OP`);
+                    addAsmLog(`LOAD R1, ${state.numA}`);
+                    addAsmLog(`LOAD R2, ${state.numB}`);
+                } else {
+                    addAsmLog(`DECODE STR_OP`);
+                    addAsmLog(`LOAD R_STR, "${state.litVal}"`);
+                }
+                state.pipelineTimer = setTimeout(() => advanceStep(3), 1200);
+            }
+            else if (targetStep === 3) {
+                addLog("EXECUTE (EX): ALU processing instructions.");
+                if (state.inputType === 'NUMBER') {
+                    const asmOp = state.op === '+' ? 'ADD' : state.op === '-' ? 'SUB' : state.op === '*' ? 'MUL' : 'DIV';
+                    addAsmLog(`${asmOp} R1, R2`);
+                } else {
+                    addAsmLog(`CALL SYS_TO_UPPER`);
+                }
+                state.pipelineTimer = setTimeout(() => advanceStep(4), 1200);
+            }
+            else if (targetStep === 4) {
+                addLog("MEMORY (MEM): Accessing Data Memory buffer.");
+                addAsmLog(`MEM_ACCESS 0x${Math.floor(Math.random()*65535).toString(16).toUpperCase()}`);
+                state.pipelineTimer = setTimeout(() => advanceStep(5), 1200);
+            }
+            else if (targetStep === 5) {
+                addLog("WRITE-BACK (WB): Updating state and outputting.");
+                addAsmLog(`WRITE_BACK & SYS_COMMIT`);
+                evaluateResult();
+            }
+        }
+
+        function startCycle() {
+            addLog("PIPELINE EXECUTION INITIATED.");
+
+            if (state.inputType === 'NUMBER') {
+                const a = parseFloat(state.numA);
+                const b = parseFloat(state.numB);
+                if (isNaN(a) || isNaN(b)) return;
+                
+                let res = 0;
+                switch(state.op) {
+                    case '+': res = a + b; break;
+                    case '-': res = a - b; break;
+                    case '*': res = a * b; break;
+                    case '/': res = b !== 0 ? parseFloat((a / b).toFixed(2)) : 'ERR'; break;
+                }
+                state.processedResult = res;
+                addLog(`LOADED OP: ${a} ${state.op} ${b}`);
+            } else {
+                if (!state.litVal.trim()) return;
+                state.processedResult = `"${state.litVal.toUpperCase()}"`;
+                state.binaryView = state.litVal.split('').map(c => c.charCodeAt(0).toString(2).padStart(8, '0')).join(' ');
+                addLog(`LOADED STR: "${state.litVal}"`);
+            }
+            
+            state.feedback = null;
+            advanceStep(1);
+        }
+
+        // Event Listeners Registration
+        document.getElementById('btn-reboot').addEventListener('click', systemReset);
+        document.getElementById('btn-abort').addEventListener('click', resetCycle);
+        document.getElementById('btn-execute').addEventListener('click', startCycle);
+        
+        document.getElementById('tab-number').addEventListener('click', () => {
+            if (state.activeStep > 0 && !state.feedback) return;
+            state.inputType = 'NUMBER';
+            resetCycle();
+        });
+        document.getElementById('tab-literal').addEventListener('click', () => {
+            if (state.activeStep > 0 && !state.feedback) return;
+            state.inputType = 'LITERAL';
+            resetCycle();
+        });
+
+        // Data binding inputs
+        document.getElementById('num-a').addEventListener('input', (e) => { state.numA = e.target.value; updateUI(); });
+        document.getElementById('num-b').addEventListener('input', (e) => { state.numB = e.target.value; updateUI(); });
+        document.getElementById('op-select').addEventListener('change', (e) => { state.op = e.target.value; updateUI(); });
+        document.getElementById('lit-val').addEventListener('input', (e) => { state.litVal = e.target.value; updateUI(); });
+
+        // Initialize Game
+        addLog("SYSTEM INITIALIZED. WAITING FOR DIRECTIVE.");
+        generateTarget();
+        renderLogs();
+        renderAsmLogs();
+        updateUI();
+
+    </script>
+</body>
+</html>
